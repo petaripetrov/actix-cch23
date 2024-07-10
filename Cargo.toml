@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
 actix-web = "4.3.1"
 derive_more = "0.99.17"
 shuttle-actix-web = "0.42.0"
