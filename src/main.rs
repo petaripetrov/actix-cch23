@@ -12,16 +12,6 @@ use shuttle_actix_web::ShuttleActixWeb;
 #[derive(PartialEq, PartialOrd, Deserialize, Clone, Copy)]
 struct Speed(f64);
 
-impl Speed {
-    fn new(val: f64) -> Option<Speed> {
-        if val.is_nan() {
-            None
-        } else {
-            Some(Speed(val))
-        }
-    }
-}
-
 impl Default for Speed {
     fn default() -> Self {
         Speed(0.0)
