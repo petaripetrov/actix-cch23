@@ -71,7 +71,7 @@ struct DeerResponse {
 
 #[derive(Debug, Display, Error)]
 enum ServerError {
-    #[display(fmt = "Internal Server Error")]
+    #[display(fmt = "500 Internal Server Error")]
     InternalError,
 }
 
@@ -89,8 +89,13 @@ impl error::ResponseError for ServerError {
     }
 }
 
+#[get("/")]
+async fn index_page() -> Result<HttpResponse, ServerError> {
+    Ok(HttpResponse::Ok().finish())
+}
+
 #[get("/-1/error")]
-async fn error_page() -> Result<&'static str, ServerError> {
+async fn error_page() -> Result<HttpResponse, ServerError> {
     Err(ServerError::InternalError)
 }
 
@@ -136,22 +141,72 @@ async fn contest(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError
     let consumer = deer_iter.max_by_key(|d| d.candies_eaten_yesterday).unwrap();
 
     let response = DeerResponse {
-        fastest: format!("Speeding past the finish line with a strength of {0} is {1}", fastest.strength, fastest.name),
-        tallest: format!("{0} is standing tall with his {1} cm wide antlers", tallest.name, tallest.antler_width),
-        magician: format!("{0} could blast you away with a snow magic power of {1}", magician.name, magician.snow_magic_power),
-        consumer: format!("{0} ate lots of candies, but also some {1}", consumer.name, consumer.favorite_food),
+        fastest: format!(
+            "Speeding past the finish line with a strength of {0} is {1}",
+            fastest.strength, fastest.name
+        ),
+        tallest: format!(
+            "{0} is standing tall with his {1} cm wide antlers",
+            tallest.name, tallest.antler_width
+        ),
+        magician: format!(
+            "{0} could blast you away with a snow magic power of {1}",
+            magician.name, magician.snow_magic_power
+        ),
+        consumer: format!(
+            "{0} ate lots of candies, but also some {1}",
+            consumer.name, consumer.favorite_food
+        ),
     };
-    
+
     Ok(HttpResponse::Ok().json(response))
+}
+
+#[derive(Deserialize)]
+struct NamesListParam {
+    offset: Option<usize>,
+    limit: Option<usize>,
+    split: Option<usize>,
+}
+
+// http://localhost:8000/5?offset=3&limit=5
+#[post("/5")]
+async fn names_list(
+    params: web::Query<NamesListParam>,
+    kids: web::Json<Vec<String>>,
+) -> Result<HttpResponse, ServerError> {
+    let offset = params.offset.unwrap_or_default();
+    let limit = params.limit.unwrap_or(kids.len());
+
+    if let Some(split) = params.split {
+        print!("{:?}", split);
+        Ok(HttpResponse::Ok().json(
+            kids[offset..]
+                .chunks(split)
+                // we limit the amount of CHUNKS, not the amount of results
+                .take(limit)
+                .collect::<Vec<_>>()
+        ))
+    } else {
+        print!("nothing");
+        Ok(HttpResponse::Ok().json(
+            kids.iter()
+                .skip(offset)
+                .take(limit)
+                .collect::<Vec<&String>>(),
+        ))
+    }
 }
 
 #[shuttle_runtime::main]
 async fn main() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
     let config = move |cfg: &mut ServiceConfig| {
+        cfg.service(index_page); // maybe replace this with a page with links to the various tasks
         cfg.service(error_page);
         cfg.service(cube_bits);
         cfg.service(strength);
         cfg.service(contest);
+        cfg.service(names_list);
     };
 
     Ok(config.into())
