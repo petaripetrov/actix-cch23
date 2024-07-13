@@ -4,7 +4,7 @@ use actix_web::{
     post, web, HttpResponse,
 };
 use derive_more::{Display, Error};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 
 #[derive(PartialEq, PartialOrd, Deserialize, Clone, Copy)]
@@ -108,14 +108,6 @@ async fn strength(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerErro
     Ok(HttpResponse::Ok().body(strength.to_string()))
 }
 
-#[derive(Serialize)]
-struct DeerResponse {
-    fastest: String,
-    tallest: String,
-    magician: String,
-    consumer: String,
-}
-
 #[post("/4/contest")]
 async fn contest(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError> {
     let deer_iter = deer.iter();
@@ -128,27 +120,26 @@ async fn contest(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError
         .unwrap();
     let consumer = deer_iter.max_by_key(|d| d.candies_eaten_yesterday).unwrap();
 
-    // TODO Replace with serde_json
-    let response = DeerResponse {
-        fastest: format!(
+    let res = json!({
+        "fastest": format!(
             "Speeding past the finish line with a strength of {0} is {1}",
             fastest.strength, fastest.name
         ),
-        tallest: format!(
+        "tallest": format!(
             "{0} is standing tall with his {1} cm wide antlers",
             tallest.name, tallest.antler_width
         ),
-        magician: format!(
+        "magician": format!(
             "{0} could blast you away with a snow magic power of {1}",
             magician.name, magician.snow_magic_power
         ),
-        consumer: format!(
+        "consumer": format!(
             "{0} ate lots of candies, but also some {1}",
             consumer.name, consumer.favorite_food
         ),
-    };
+    });
 
-    Ok(HttpResponse::Ok().json(response))
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[derive(Deserialize)]
