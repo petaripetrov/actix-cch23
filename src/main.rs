@@ -17,6 +17,8 @@ async fn actix_web() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send +
                 .service(endpoints::elf_on_shelf)
                 .service(endpoints::decode)
                 .service(endpoints::bake)
+                .service(endpoints::poke_weigth)
+                .service(endpoints::poke_drop)
         );
     };
 
