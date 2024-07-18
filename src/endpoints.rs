@@ -1,3 +1,4 @@
+use actix_multipart::form::{self, tempfile::TempFile, MultipartForm};
 use actix_web::{
     error, get,
     http::{header::ContentType, StatusCode},
@@ -5,6 +6,7 @@ use actix_web::{
 };
 use base64::{engine::general_purpose, Engine};
 use derive_more::{Display, Error};
+use image::{io::Reader as ImageRader, Rgb};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -312,22 +314,66 @@ async fn poke_weigth(path: web::Path<usize>) -> Result<HttpResponse, ServerError
     match get_poke_weight(id).await {
         Ok(weight) => Ok(HttpResponse::Ok()
             .body(((weight as f32) / 10.0/* convert hectograms to kg */).to_string())),
-        Err(_) => Err(ServerError::InternalError)
+        Err(_) => Err(ServerError::InternalError),
     }
 }
 
 #[get("/8/drop/{id}")]
 async fn poke_drop(path: web::Path<usize>) -> Result<HttpResponse, ServerError> {
     const G: f32 = 9.825;
-    const HEIGHT: f32 = 10.0; 
+    const HEIGHT: f32 = 10.0;
 
     let id = path.into_inner();
-    let velocity = f32::sqrt(2.0 * HEIGHT * G); // We calculate 
-
+    let velocity = f32::sqrt(2.0 * HEIGHT * G); // We calculate
 
     match get_poke_weight(id).await {
-        Ok(weight) => Ok(HttpResponse::Ok()
-            .body((((weight as f32) / 10.0) * velocity/* convert hectograms to kg and apply velocity*/).to_string())),
-        Err(_) => Err(ServerError::InternalError)
-    } 
+        Ok(weight) => Ok(HttpResponse::Ok().body(
+            (((weight as f32) / 10.0) * velocity/* convert hectograms to kg and apply velocity*/)
+                .to_string(),
+        )),
+        Err(_) => Err(ServerError::InternalError),
+    }
+}
+
+#[derive(Debug, MultipartForm)]
+struct UploadForm {
+    image: TempFile,
+}
+
+#[post("11/red_pixels")]
+async fn red_pixels(
+    MultipartForm(form): MultipartForm<UploadForm>,
+) -> Result<HttpResponse, ServerError> {
+    // A beautiful nest of match statements and error handling
+    // Cant use the shorthand '?' because that can't be mapped to ServerError
+    // TODO figure out why '?' can't map to ServerError
+    let img = match ImageRader::open(form.image.file) {
+        Ok(reader) => match reader.with_guessed_format() {
+            Ok(file) => match file.decode() {
+                Ok(image) => image,
+                Err(_) => return Err(ServerError::InternalError),
+            },
+            Err(_) => return Err(ServerError::InternalError),
+        },
+        Err(_) => return Err(ServerError::InternalError),
+    };
+
+    // Have to take the image as rgb8, so we also have to cast 
+    // all of the numbers to usize to get around overflows
+    let pixels = match img.as_rgb8() {
+        Some(img) => img.pixels(),
+        None => return Err(ServerError::InternalError),
+    };
+
+    let count = pixels
+        .filter(|Rgb([red, green, blue])| {
+            let r = *red as usize;
+            let g = *green as usize;
+            let b = *blue as usize;
+
+            return r > g + b;
+        })
+        .count();
+
+    Ok(HttpResponse::Ok().body(count.to_string()))
 }

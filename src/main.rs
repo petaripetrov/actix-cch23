@@ -1,3 +1,4 @@
+use actix_files::Files;
 use actix_web::web::{self, ServiceConfig};
 use shuttle_actix_web::ShuttleActixWeb;
 
@@ -19,6 +20,8 @@ async fn actix_web() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send +
                 .service(endpoints::bake)
                 .service(endpoints::poke_weigth)
                 .service(endpoints::poke_drop)
+                .service(Files::new("/11/assets", "assets"))
+                .service(endpoints::red_pixels)
         );
     };
 
