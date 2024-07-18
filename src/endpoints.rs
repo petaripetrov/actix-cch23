@@ -1,4 +1,4 @@
-use actix_multipart::form::{self, tempfile::TempFile, MultipartForm};
+use actix_multipart::form::{tempfile::TempFile, MultipartForm};
 use actix_web::{
     error, get,
     http::{header::ContentType, StatusCode},

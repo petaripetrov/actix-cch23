@@ -2,4 +2,3 @@
 .shuttle-storage
 Secrets*.toml
 Shuttle.toml
-/assets
