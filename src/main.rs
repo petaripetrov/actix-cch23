@@ -35,6 +35,7 @@ async fn actix_web() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send +
                 .service(endpoints::set_time)
                 .service(endpoints::get_elapsed)
                 .service(endpoints::parse_ulids)
+                .service(endpoints::count_ulids)
         );
     };
 

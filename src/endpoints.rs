@@ -5,6 +5,7 @@ use actix_web::{
     post, web, HttpRequest, HttpResponse,
 };
 use base64::{engine::general_purpose, Engine};
+use chrono::{DateTime, Datelike, Utc};
 use derive_more::{Display, Error};
 use image::{io::Reader as ImageRader, Rgb};
 use serde::{Deserialize, Serialize};
@@ -122,6 +123,7 @@ async fn strength(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerErro
 async fn contest(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError> {
     let deer_iter = deer.iter();
 
+    // Probably can replace this with only one loop
     let fastest = deer_iter.clone().max_by_key(|d| d.speed).unwrap();
     let tallest = deer_iter.clone().max_by_key(|d| d.height).unwrap();
     let magician = deer_iter
@@ -407,6 +409,7 @@ async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, Server
         .iter()
         .rev()
         .map(|x| {
+            // Replace with uuid feature on ulid crate
             let bytes = x.to_bytes();
             let uuid = Uuid::from_bytes(bytes);
 
@@ -417,3 +420,45 @@ async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, Server
     Ok(HttpResponse::Ok().json(res))
 }
 
+#[post("12/ulids/{weekday}")]
+async fn count_ulids(path: web::Path<u32>, ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, ServerError> /* replace this with a type */ {
+    // let christmas_eve = ulids.iter().filter(|x| {
+    //     let test: DateTime<Utc> = x.datetime().into();
+
+    //     return false;
+    // });
+    let weekday = path.into_inner();
+    let mut christmas_c: usize = 0;
+    let mut weekday_c: usize = 0;
+    let mut in_future_c: usize = 0;
+    let mut lsb_1_c: usize = 0;
+
+    for ulid in ulids.into_inner() {
+        let date: DateTime<Utc> = ulid.datetime().into();
+
+        if date.month() == 12 && date.day() == 24 {
+            christmas_c += 1;
+        }
+
+        if date.weekday().num_days_from_monday() == weekday {
+            weekday_c += 1;
+        }
+
+        if Utc::now() < date {
+            in_future_c += 1;
+        }
+        
+        if ulid.to_bytes().last().unwrap() % 2 == 1 {
+            lsb_1_c += 1;
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(
+        json!({
+            "christmas eve": christmas_c,
+            "weekday": weekday_c,
+            "in the future": in_future_c,
+            "LSB is 1": lsb_1_c
+        })
+    ))
+}
