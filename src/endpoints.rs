@@ -9,7 +9,13 @@ use derive_more::{Display, Error};
 use image::{io::Reader as ImageRader, Rgb};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex, time::Instant};
+use ulid::Ulid;
+use uuid::Uuid;
+
+pub struct AppState {
+    pub log: Mutex<HashMap<String, Instant>>,
+}
 
 #[derive(PartialEq, PartialOrd, Deserialize, Clone, Copy)]
 struct Speed(f64);
@@ -224,17 +230,6 @@ async fn decode(req: HttpRequest) -> Result<HttpResponse, ServerError> {
     Ok(HttpResponse::Ok().body(decoded))
 }
 
-// #[derive(Deserialize, Serialize)]
-// struct CookieData {
-//     flour: usize,
-//     sugar: usize,
-//     butter: usize,
-//     #[serde(rename(deserialize = "baking powder", serialize = "baking powder"))]
-//     baking_powder: usize,
-//     #[serde(rename(deserialize = "chocolate chips", serialize = "chocolate chips"))]
-//     chocolate_chips: usize,
-// }
-
 #[derive(Deserialize, Serialize)]
 struct BakingData {
     recipe: HashMap<String, usize>,
@@ -358,7 +353,7 @@ async fn red_pixels(
         Err(_) => return Err(ServerError::InternalError),
     };
 
-    // Have to take the image as rgb8, so we also have to cast 
+    // Have to take the image as rgb8, so we also have to cast
     // all of the numbers to usize to get around overflows
     let pixels = match img.as_rgb8() {
         Some(img) => img.pixels(),
@@ -377,3 +372,48 @@ async fn red_pixels(
 
     Ok(HttpResponse::Ok().body(count.to_string()))
 }
+
+#[post("12/save/{string}")]
+async fn set_time(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse, ServerError> {
+    let id = path.into_inner();
+    let mut log = data.log.lock().unwrap(); // match and handle the error
+    let start = Instant::now();
+
+    log.insert(id, start);
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+#[get("12/load/{string}")]
+async fn get_elapsed(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse, ServerError> {
+    let id = path.into_inner();
+    let log = data.log.lock().unwrap(); // match and handle
+
+    let elapsed = log.get(&id).unwrap().elapsed();
+
+    Ok(HttpResponse::Ok().body(elapsed.as_secs().to_string()))
+}
+
+#[post("12/ulids")]
+async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, ServerError> {
+    let res = ulids
+        .into_inner()
+        .iter()
+        .rev()
+        .map(|x| {
+            let bytes = x.to_bytes();
+            let uuid = Uuid::from_bytes(bytes);
+
+            uuid.to_string()
+        })
+        .collect::<Vec<String>>();
+
+    Ok(HttpResponse::Ok().json(res))
+}
+
