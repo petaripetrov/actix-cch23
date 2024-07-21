@@ -6,13 +6,23 @@ use actix_files::Files;
 use actix_web::web::{self, ServiceConfig};
 use shuttle_actix_web::ShuttleActixWeb;
 use endpoints::AppState;
+use sqlx::PgPool;
 
 #[shuttle_runtime::main]
-async fn actix_web() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
-    
+async fn actix_web(
+    #[shuttle_shared_db::Postgres(
+        local_uri = "postgres://postgres:{secrets.PASSWORD}@localhost:5432/postgres"
+    )] pool: PgPool,
+) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations!");
+
     // Prevents double arc
     let state = web::Data::new(AppState {
         log: Mutex::new(HashMap::new()),
+        pool
     });
 
     let config = move |cfg: &mut ServiceConfig| {
@@ -36,6 +46,11 @@ async fn actix_web() -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send +
                 .service(endpoints::get_elapsed)
                 .service(endpoints::parse_ulids)
                 .service(endpoints::count_ulids)
+                .service(endpoints::test_sql)
+                .service(endpoints::reset_orders)
+                .service(endpoints::insert_orders)
+                .service(endpoints::get_total)
+                .service(endpoints::get_popular)
         );
     };
 
