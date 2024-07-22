@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Mutex, time::Instant};
+use tinytemplate::TinyTemplate;
 use ulid::Ulid;
 use uuid::Uuid;
 
@@ -483,7 +484,10 @@ struct Order {
 
 #[post("13/reset")]
 async fn reset_orders(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
-    match sqlx::query("DELETE FROM orders;").execute(&state.pool).await {
+    match sqlx::query("DELETE FROM orders;")
+        .execute(&state.pool)
+        .await
+    {
         Ok(_) => Ok(HttpResponse::Ok().finish()),
         Err(_) => Err(ServerError::InternalError),
     }
@@ -517,9 +521,12 @@ async fn insert_orders(
 
 #[get("13/orders/total")]
 async fn get_total(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
-    match sqlx::query_scalar::<sqlx::Postgres, i64>("SELECT SUM(quantity) FROM orders;").fetch_one(&state.pool).await {
+    match sqlx::query_scalar::<sqlx::Postgres, i64>("SELECT SUM(quantity) FROM orders;")
+        .fetch_one(&state.pool)
+        .await
+    {
         Ok(sum) => Ok(HttpResponse::Ok().json(json!({"total": sum}))),
-        Err(_) => Err(ServerError::InternalError)
+        Err(_) => Err(ServerError::InternalError),
     }
 }
 
@@ -529,4 +536,60 @@ async fn get_popular(state: web::Data<AppState>) -> Result<HttpResponse, ServerE
         Ok(name) => Ok(HttpResponse::Ok().json(json!({"popular": name}))),
         Err(_) => Err(ServerError::InternalError)
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TemplateContext {
+    content: String,
+}
+
+static TEMPLATE: &'static str = "\
+<html>
+  <head>
+    <title>CCH23 Day 14</title>
+  </head>
+  <body>
+    {content}
+  </body>
+</html>";
+
+#[post("14/unsafe")]
+async fn render_unsafe(body: web::Json<TemplateContext>) -> Result<HttpResponse, ServerError> {
+    let context = body.into_inner();
+    let mut tt = TinyTemplate::new();
+    tt.set_default_formatter(&tinytemplate::format_unescaped);
+    
+    match tt.add_template("unsafe", TEMPLATE) {
+        Err(_) => return Err(ServerError::InternalError),
+        _ => (),
+    }
+
+    let rendered = match tt.render("unsafe", &context) {
+        Ok(body) => body,
+        Err(_) => return Err(ServerError::InternalError)
+    };
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(rendered))
+}
+
+#[post("14/safe")]
+async fn render_safe(body: web::Json<TemplateContext>) -> Result<HttpResponse, ServerError> {
+    let context = body.into_inner();
+    let mut tt = TinyTemplate::new();
+    
+    match tt.add_template("safe", TEMPLATE) {
+        Err(_) => return Err(ServerError::InternalError),
+        _ => (),
+    }
+
+    let rendered = match tt.render("safe", &context) {
+        Ok(body) => body,
+        Err(_) => return Err(ServerError::InternalError)
+    };
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(rendered))
 }

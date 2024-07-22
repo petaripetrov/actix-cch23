@@ -51,6 +51,8 @@ async fn actix_web(
                 .service(endpoints::insert_orders)
                 .service(endpoints::get_total)
                 .service(endpoints::get_popular)
+                .service(endpoints::render_unsafe)
+                .service(endpoints::render_safe)
         );
     };
 
