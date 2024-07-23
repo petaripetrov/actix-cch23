@@ -1,15 +1,12 @@
+use crate::types::{EndpointRet, PasswordErrors, ServerError};
+
 use actix_multipart::form::{tempfile::TempFile, MultipartForm};
-use actix_web::{
-    error, get,
-    http::{header::ContentType, StatusCode},
-    post, web, HttpRequest, HttpResponse,
-};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use base64::{engine::general_purpose, Engine};
 use chrono::{DateTime, Datelike, Utc};
-use derive_more::{Display, Error};
 use image::{io::Reader as ImageRader, Rgb};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Mutex, time::Instant};
 use tinytemplate::TinyTemplate;
@@ -63,38 +60,18 @@ struct Deer {
     candies_eaten_yesterday: i64,
 }
 
-#[derive(Debug, Display, Error)]
-enum ServerError {
-    #[display(fmt = "500 Internal Server Error")]
-    InternalError,
-}
-
-impl error::ResponseError for ServerError {
-    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
-        HttpResponse::build(self.status_code())
-            .insert_header(ContentType::html())
-            .body(self.to_string())
-    }
-
-    fn status_code(&self) -> StatusCode {
-        match *self {
-            ServerError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 #[get("/")]
-async fn index_page() -> Result<HttpResponse, ServerError> {
+async fn index_page() -> EndpointRet {
     Ok(HttpResponse::Ok().finish())
 }
 
 #[get("/-1/error")]
-async fn error_page() -> Result<HttpResponse, ServerError> {
+async fn error_page() -> EndpointRet {
     Err(ServerError::InternalError)
 }
 
 #[get("/1/{ids:.*}")]
-async fn cube_bits(path: web::Path<String>) -> Result<HttpResponse, ServerError> {
+async fn cube_bits(path: web::Path<String>) -> EndpointRet {
     let ids = path.into_inner();
 
     print!("{}", ids);
@@ -116,14 +93,14 @@ async fn cube_bits(path: web::Path<String>) -> Result<HttpResponse, ServerError>
 }
 
 #[post("/4/strength")]
-async fn strength(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError> {
+async fn strength(deer: web::Json<Vec<Deer>>) -> EndpointRet {
     let strength: i64 = deer.iter().map(|d| d.strength).sum();
 
     Ok(HttpResponse::Ok().body(strength.to_string()))
 }
 
 #[post("/4/contest")]
-async fn contest(deer: web::Json<Vec<Deer>>) -> Result<HttpResponse, ServerError> {
+async fn contest(deer: web::Json<Vec<Deer>>) -> EndpointRet {
     let deer_iter = deer.iter();
 
     // Probably can replace this with only one loop
@@ -169,7 +146,7 @@ struct NamesListParam {
 async fn names_list(
     params: web::Query<NamesListParam>,
     kids: web::Json<Vec<String>>,
-) -> Result<HttpResponse, ServerError> {
+) -> EndpointRet {
     let offset = params.offset.unwrap_or_default();
     let limit = params.limit.unwrap_or(kids.len());
 
@@ -204,7 +181,7 @@ async fn names_list(
 /// {"elf":4}
 ///
 #[post("/6")]
-async fn elf_on_shelf(text: String) -> Result<HttpResponse, ServerError> {
+async fn elf_on_shelf(text: String) -> EndpointRet {
     let elf_on_a_shelf = b"elf on a shelf";
     let shelf_count = text.matches("shelf").count();
     let elf_on_shelf = text
@@ -223,7 +200,7 @@ async fn elf_on_shelf(text: String) -> Result<HttpResponse, ServerError> {
 }
 
 #[get("/7/decode")]
-async fn decode(req: HttpRequest) -> Result<HttpResponse, ServerError> {
+async fn decode(req: HttpRequest) -> EndpointRet {
     let cookie = match req.cookie("recipe") {
         Some(val) => val,
         None => return Err(ServerError::InternalError),
@@ -242,7 +219,7 @@ struct BakingData {
 }
 
 #[get("/7/bake")]
-async fn bake(req: HttpRequest) -> Result<HttpResponse, ServerError> {
+async fn bake(req: HttpRequest) -> EndpointRet {
     let cookie = match req.cookie("recipe") {
         Some(val) => val,
         None => return Err(ServerError::InternalError),
@@ -308,7 +285,7 @@ async fn get_poke_weight(id: usize) -> Result<i32, ServerError> {
 }
 
 #[get("/8/weight/{id}")]
-async fn poke_weigth(path: web::Path<usize>) -> Result<HttpResponse, ServerError> {
+async fn poke_weigth(path: web::Path<usize>) -> EndpointRet {
     let id = path.into_inner();
 
     match get_poke_weight(id).await {
@@ -319,7 +296,7 @@ async fn poke_weigth(path: web::Path<usize>) -> Result<HttpResponse, ServerError
 }
 
 #[get("/8/drop/{id}")]
-async fn poke_drop(path: web::Path<usize>) -> Result<HttpResponse, ServerError> {
+async fn poke_drop(path: web::Path<usize>) -> EndpointRet {
     const G: f32 = 9.825;
     const HEIGHT: f32 = 10.0;
 
@@ -341,9 +318,7 @@ struct UploadForm {
 }
 
 #[post("11/red_pixels")]
-async fn red_pixels(
-    MultipartForm(form): MultipartForm<UploadForm>,
-) -> Result<HttpResponse, ServerError> {
+async fn red_pixels(MultipartForm(form): MultipartForm<UploadForm>) -> EndpointRet {
     // A beautiful nest of match statements and error handling
     // Cant use the shorthand '?' because that can't be mapped to ServerError
     // TODO figure out why '?' can't map to ServerError
@@ -379,10 +354,7 @@ async fn red_pixels(
 }
 
 #[post("12/save/{string}")]
-async fn set_time(
-    path: web::Path<String>,
-    data: web::Data<AppState>,
-) -> Result<HttpResponse, ServerError> {
+async fn set_time(path: web::Path<String>, data: web::Data<AppState>) -> EndpointRet {
     let id = path.into_inner();
     let mut log = data.log.lock().unwrap(); // match and handle the error
     let start = Instant::now();
@@ -393,10 +365,7 @@ async fn set_time(
 }
 
 #[get("12/load/{string}")]
-async fn get_elapsed(
-    path: web::Path<String>,
-    data: web::Data<AppState>,
-) -> Result<HttpResponse, ServerError> {
+async fn get_elapsed(path: web::Path<String>, data: web::Data<AppState>) -> EndpointRet {
     let id = path.into_inner();
     let log = data.log.lock().unwrap(); // match and handle
 
@@ -406,7 +375,7 @@ async fn get_elapsed(
 }
 
 #[post("12/ulids")]
-async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, ServerError> {
+async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> EndpointRet {
     let res = ulids
         .into_inner()
         .iter()
@@ -424,10 +393,8 @@ async fn parse_ulids(ulids: web::Json<Vec<Ulid>>) -> Result<HttpResponse, Server
 }
 
 #[post("12/ulids/{weekday}")]
-async fn count_ulids(
-    path: web::Path<u32>,
-    ulids: web::Json<Vec<Ulid>>,
-) -> Result<HttpResponse, ServerError> /* replace this with a type */ {
+async fn count_ulids(path: web::Path<u32>, ulids: web::Json<Vec<Ulid>>) -> EndpointRet /* replace this with a type */
+{
     let weekday = path.into_inner();
     let mut christmas_c: usize = 0;
     let mut weekday_c: usize = 0;
@@ -463,7 +430,7 @@ async fn count_ulids(
 }
 
 #[get("13/sql")]
-async fn test_sql(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
+async fn test_sql(state: web::Data<AppState>) -> EndpointRet {
     let test_run: i32 = sqlx::query_scalar("SELECT 20231213")
         .fetch_one(&state.pool)
         .await
@@ -483,7 +450,7 @@ struct Order {
 }
 
 #[post("13/reset")]
-async fn reset_orders(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
+async fn reset_orders(state: web::Data<AppState>) -> EndpointRet {
     match sqlx::query("DELETE FROM orders;")
         .execute(&state.pool)
         .await
@@ -494,10 +461,7 @@ async fn reset_orders(state: web::Data<AppState>) -> Result<HttpResponse, Server
 }
 
 #[post("13/orders")]
-async fn insert_orders(
-    state: web::Data<AppState>,
-    body: web::Json<Vec<Order>>,
-) -> Result<HttpResponse, ServerError> {
+async fn insert_orders(state: web::Data<AppState>, body: web::Json<Vec<Order>>) -> EndpointRet {
     let orders = body.into_inner();
 
     let mut transaction = state.pool.begin().await.unwrap(); // handle error
@@ -520,7 +484,7 @@ async fn insert_orders(
 }
 
 #[get("13/orders/total")]
-async fn get_total(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
+async fn get_total(state: web::Data<AppState>) -> EndpointRet {
     match sqlx::query_scalar::<sqlx::Postgres, i64>("SELECT SUM(quantity) FROM orders;")
         .fetch_one(&state.pool)
         .await
@@ -531,7 +495,7 @@ async fn get_total(state: web::Data<AppState>) -> Result<HttpResponse, ServerErr
 }
 
 #[get("13/orders/popular")]
-async fn get_popular(state: web::Data<AppState>) -> Result<HttpResponse, ServerError> {
+async fn get_popular(state: web::Data<AppState>) -> EndpointRet {
     match sqlx::query_scalar::<sqlx::Postgres, String>("SELECT gift_name FROM public.orders GROUP BY gift_name ORDER BY SUM(quantity) DESC LIMIT 1").fetch_optional(&state.pool).await {
         Ok(name) => Ok(HttpResponse::Ok().json(json!({"popular": name}))),
         Err(_) => Err(ServerError::InternalError)
@@ -554,11 +518,11 @@ static TEMPLATE: &'static str = "\
 </html>";
 
 #[post("14/unsafe")]
-async fn render_unsafe(body: web::Json<TemplateContext>) -> Result<HttpResponse, ServerError> {
+async fn render_unsafe(body: web::Json<TemplateContext>) -> EndpointRet {
     let context = body.into_inner();
     let mut tt = TinyTemplate::new();
     tt.set_default_formatter(&tinytemplate::format_unescaped);
-    
+
     match tt.add_template("unsafe", TEMPLATE) {
         Err(_) => return Err(ServerError::InternalError),
         _ => (),
@@ -566,7 +530,7 @@ async fn render_unsafe(body: web::Json<TemplateContext>) -> Result<HttpResponse,
 
     let rendered = match tt.render("unsafe", &context) {
         Ok(body) => body,
-        Err(_) => return Err(ServerError::InternalError)
+        Err(_) => return Err(ServerError::InternalError),
     };
 
     Ok(HttpResponse::Ok()
@@ -575,10 +539,10 @@ async fn render_unsafe(body: web::Json<TemplateContext>) -> Result<HttpResponse,
 }
 
 #[post("14/safe")]
-async fn render_safe(body: web::Json<TemplateContext>) -> Result<HttpResponse, ServerError> {
+async fn render_safe(body: web::Json<TemplateContext>) -> EndpointRet {
     let context = body.into_inner();
     let mut tt = TinyTemplate::new();
-    
+
     match tt.add_template("safe", TEMPLATE) {
         Err(_) => return Err(ServerError::InternalError),
         _ => (),
@@ -586,10 +550,78 @@ async fn render_safe(body: web::Json<TemplateContext>) -> Result<HttpResponse, S
 
     let rendered = match tt.render("safe", &context) {
         Ok(body) => body,
-        Err(_) => return Err(ServerError::InternalError)
+        Err(_) => return Err(ServerError::InternalError),
     };
 
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(rendered))
+}
+
+#[derive(Deserialize, Serialize)]
+struct PasswordBody {
+    #[serde(rename(serialize = "result"))]
+    input: String,
+}
+
+#[post("15/nice")]
+async fn password_nice(body: web::Json<Value>) -> EndpointRet {
+    let input = match serde_json::from_value(body.into_inner()) {
+        Ok(PasswordBody { input }) => input,
+        Err(_) => {
+            return Ok(HttpResponse::BadRequest().json(PasswordBody {
+                input: "naughty".to_owned(),
+            }))
+        }
+    };
+
+    const EXCLUDE: &[&str; 4] = &["ab", "cd", "pq", "xy"];
+    const VOWELS: [char; 6] = ['a', 'e', 'i', 'o', 'u', 'y'];
+
+    let mut consec = false;
+    let mut vowel_cnt = 0;
+
+    for i in 0..input.len() - 1 {
+        // TODO refactor with iter and window(2)
+        let window = &input[i..i + 2];
+        let mut c = window.chars();
+        let (left, right) = (c.next().unwrap(), c.next().unwrap());
+
+        if left.is_alphabetic() && left == right {
+            consec = true;
+        }
+
+        if VOWELS.iter().any(|&x| x == left) {
+            vowel_cnt += 1;
+        }
+
+        if EXCLUDE.iter().any(|&x| x == window) {
+            return Ok(HttpResponse::BadRequest().json(PasswordBody {
+                input: "naughty".to_owned(),
+            }));
+        }
+    }
+
+    let res = if consec && vowel_cnt >= 3 {
+        HttpResponse::Ok().json(PasswordBody {
+            input: "nice".to_owned(),
+        })
+    } else {
+        HttpResponse::BadRequest().json(PasswordBody {
+            input: "naughty".to_owned(),
+        })
+    };
+
+    Ok(res)
+}
+
+#[post("15/game")]
+async fn password_game(body: web::Json<PasswordBody>) -> EndpointRet {
+    let input = body.into_inner().input;
+
+    if input.len() < 8 {
+        return Err(ServerError::PasswordError(PasswordErrors::EightChars));
+    }
+
+    Ok(HttpResponse::Ok().finish())
 }

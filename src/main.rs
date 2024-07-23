@@ -1,4 +1,5 @@
 mod endpoints;
+mod types;
 
 use std::{collections::HashMap, sync::Mutex};
 
@@ -53,6 +54,8 @@ async fn actix_web(
                 .service(endpoints::get_popular)
                 .service(endpoints::render_unsafe)
                 .service(endpoints::render_safe)
+                .service(endpoints::password_nice)
+                .service(endpoints::password_game)
         );
     };
 
