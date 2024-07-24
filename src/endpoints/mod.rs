@@ -13,6 +13,8 @@ mod day_11;
 mod day_12;
 mod day_13;
 mod day_14;
+mod day_15;
+
 #[get("/")]
 async fn index_page() -> EndpointRet {
     Ok(HttpResponse::Ok().finish())
@@ -49,4 +51,6 @@ pub fn routes() -> Scope {
         .service(day_13::get_popular)
         .service(day_14::render_unsafe)
         .service(day_14::render_safe)
+        .service(day_15::password_nice)
+        .service(day_15::password_game)
 }
